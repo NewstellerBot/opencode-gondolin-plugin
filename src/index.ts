@@ -2,6 +2,7 @@ import path from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
 import { SessionManager } from "./session-manager"
 import { createBashTool } from "./bash-tool"
+import { createBranchTool, autoCreateBranch } from "./create-branch-tool"
 import { remapPath, TOOL_PATH_ARGS } from "./path-remap"
 import { pruneWorktrees } from "./worktree"
 
@@ -27,9 +28,10 @@ export const GondolinPlugin: Plugin = async (input) => {
   process.on("beforeExit", cleanup)
 
   return {
-    // Override the bash tool to execute inside the VM
+    // Override the bash tool to execute inside the VM, and add branch creation tool
     tool: {
       bash: createBashTool(sessionManager, directory, vmWorkspace),
+      create_branch: createBranchTool(sessionManager, directory),
     },
 
     // Remap file paths for read/write/edit/glob/grep to the session's worktree
@@ -74,6 +76,9 @@ export const GondolinPlugin: Plugin = async (input) => {
           `Bash commands execute inside the VM at ${vmWorkspace}.`,
           `File operations target the worktree at ${state.worktreeDir}.`,
           `Use ${state.worktreeDir} as the base directory for file paths.`,
+          "",
+          "To create a PR from your changes, use the create_branch tool before ending the session.",
+          "Ask the user for a branch name and commit message, then call the tool to push changes to the original repo.",
           "</gondolin-sandbox>",
         ].join("\n"),
       )
@@ -84,6 +89,10 @@ export const GondolinPlugin: Plugin = async (input) => {
       if (event.type === "session.deleted") {
         const info = (event as any).properties?.info
         if (info?.id) {
+          // Try to auto-create a branch with any uncommitted changes before cleanup
+          await autoCreateBranch(sessionManager, directory, info.id).catch(
+            () => {},
+          )
           await sessionManager.destroy(info.id).catch(() => {})
         }
       }

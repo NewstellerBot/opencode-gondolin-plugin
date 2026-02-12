@@ -44,3 +44,51 @@ export async function removeWorktree(
 export async function pruneWorktrees(projectDir: string): Promise<void> {
   await exec("git", ["worktree", "prune"], { cwd: projectDir }).catch(() => {})
 }
+
+/**
+ * Check if the worktree has uncommitted changes.
+ */
+export async function hasChanges(worktreeDir: string): Promise<boolean> {
+  const { stdout } = await exec("git", ["status", "--porcelain"], {
+    cwd: worktreeDir,
+  })
+  return stdout.trim().length > 0
+}
+
+/**
+ * Stage all changes and commit them.
+ */
+export async function commitAllChanges(
+  worktreeDir: string,
+  message: string,
+): Promise<void> {
+  await exec("git", ["add", "-A"], { cwd: worktreeDir })
+  await exec("git", ["commit", "-m", message], { cwd: worktreeDir })
+}
+
+/**
+ * Push the current HEAD to origin as a new branch.
+ * Fails if the branch already exists on the remote.
+ */
+export async function pushBranch(
+  worktreeDir: string,
+  branchName: string,
+): Promise<void> {
+  await exec("git", ["push", "origin", `HEAD:refs/heads/${branchName}`], {
+    cwd: worktreeDir,
+  })
+}
+
+/**
+ * Get the remote URL for origin.
+ */
+export async function getRemoteUrl(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await exec("git", ["remote", "get-url", "origin"], {
+      cwd: dir,
+    })
+    return stdout.trim()
+  } catch {
+    return null
+  }
+}
